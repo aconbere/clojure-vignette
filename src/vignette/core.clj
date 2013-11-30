@@ -3,6 +3,15 @@
 
 (def db {})
 
+(defn make-key-regex [k]
+  (re-pattern (clojure.string/replace k #"%" ".*")))
+
+(defn key-matches? [k b]
+  (boolean (re-matches (make-key-regex k) b)))
+
+(defn find-matching-keys [db query]
+  (filter (fn [k] (key-matches? query k) ) (keys db)))
+
 (defn v-update
   [current update]
   (loop [acc {}
@@ -25,15 +34,17 @@
       (def db (assoc db k current))
       updates)))
 
-(defn db-query
+(defn db-search
   [db query]
-  {})
+  (let [ks (find-matching-keys db query)
+        results (select-keys db ks)]
+    results))
 
 (defn db-lookup [db k] (get db k {}))
 
 (defn find-neighbors
   [db]
-  (distinct (map (keys (db-query db "n:%")) #( (drop 2 %) ))))
+  (distinct (map (keys (db-search db "n:%")) #( (drop 2 %) ))))
 
 (defn pick-neighbor
   [db]
@@ -57,15 +68,6 @@
     (is-search k) :search
     :else :store))
 
-(defn make-key-regex [k]
-  (re-pattern (clojure.string/replace k #"%" ".*")))
-
-(defn key-matches? [k b]
-  (boolean (re-matches (make-key-regex k) b)))
-
-(defn find-matching-keys [db query]
-  (filter (fn [k] (key-matches? query k) ) (keys db)))
-
 (defmulti handle-message (fn [msg _ _ _] (message-type msg)))
 
 (defmethod handle-message :store
@@ -82,12 +84,10 @@
 
 (defmethod handle-message :search
   [{ query "key" v "vector" ttl "ttl"} ch host port]
-  (let [ks (find-matching-keys db query)
-        response (select-keys db ks)]
-    (map response
-         (fn [k v]
-           (enqueue ch
-                    (udp-msg host port {:key k :vector v :ttl 50}))))))
+  (let [results (db-search db query)]
+    (map results (fn [k v]
+       (enqueue ch
+          (udp-msg host port {:key k :vector v :ttl 50}))))))
 
 (defn run-server [port]
   (let [ch (deref (udp-socket {:port port}))]
