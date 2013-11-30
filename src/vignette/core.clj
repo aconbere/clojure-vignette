@@ -21,13 +21,15 @@
   [db k v]
   (if (or (empty? v) (= (first k) \%))
     {}
-    (let [[updates current] (v-update (get db k {}))]
+    (let [[updates current] (v-update (get db k {}) v)]
       (def db (assoc db k current))
       updates)))
 
 (defn db-query
   [db query]
   {})
+
+(defn db-lookup [db k] (get db k {}))
 
 (defn find-neighbors
   [db]
@@ -45,8 +47,8 @@
   [host port msg]
   {:host host :port port :message msg})
 
-(defn is-aggregate [k] false)
-(defn is-search [k] false)
+(defn is-search [k] (re-matches #".*%.*" k))
+(defn is-aggregate [k] (re-matches #".*\*.*" k))
 
 (defn message-type
   [{ k "key" v "vector" ttl "ttl"}]
@@ -55,9 +57,19 @@
     (is-search k) :search
     :else :store))
 
-(defmulti handle-msg (fn [msg _ _ _] (message-type msg)))
+(defn make-key-regex [k]
+  (re-pattern (clojure.string/replace k #"%" ".*")))
 
-(defmethod handle-msg :store [{ k "key" v "vector" ttl "ttl"} ch host port]
+(defn key-matches? [k b]
+  (boolean (re-matches (make-key-regex k) b)))
+
+(defn find-matching-keys [db query]
+  (filter (fn [k] (key-matches? query k) ) (keys db)))
+
+(defmulti handle-message (fn [msg _ _ _] (message-type msg)))
+
+(defmethod handle-message :store
+  [{ k "key" v "vector" ttl "ttl"} ch host port]
   (let [updates (db-update db k v)]
     (if (not-empty (:vector updates))
       (let [to-send (udp-msg
@@ -66,8 +78,16 @@
                      {:key k :vector updates :ttl (- ttl 1)})]
         (enqueue ch (mp/pack to-send))))))
 
-(defmethod handle-msg :aggregate [{ k "key" v "vector" ttl "ttl"} ch host port] nil)
-(defmethod handle-msg :search [{ k "key" v "vector" ttl "ttl"} ch host port] nil)
+(defmethod handle-message :aggregate [{ k "key" v "vector" ttl "ttl"} ch host port] nil)
+
+(defmethod handle-message :search
+  [{ query "key" v "vector" ttl "ttl"} ch host port]
+  (let [ks (find-matching-keys db query)
+        response (select-keys db ks)]
+    (map response
+         (fn [k v]
+           (enqueue ch
+                    (udp-msg host port {:key k :vector v :ttl 50}))))))
 
 (defn run-server [port]
   (let [ch (deref (udp-socket {:port port}))]
@@ -77,4 +97,5 @@
         (let [barray (.array message)
               msg (first (mp/unpack barray))]
           (println (str "received " msg " from " host))
-          (handle-msg msg ch host port))))))
+          (store-neighbor db host)
+          (handle-message msg ch host port))))))
