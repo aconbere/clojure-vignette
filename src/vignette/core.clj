@@ -1,5 +1,5 @@
 (ns vignette.core
-  (:use [aleph udp]))
+  (:use [lamina core] [aleph udp] [clj-msgpack.core :as mp] [gloss core io]))
 
 (def db {})
 
@@ -31,7 +31,7 @@
 
 (defn find-neighbors
   [db]
-  (distinct (map (keys (db-query db "n:%")) #{ (drop 2 %) })))
+  (distinct (map (keys (db-query db "n:%")) #( (drop 2 %) ))))
 
 (defn pick-neighbor
   [db]
@@ -45,29 +45,36 @@
   [host port msg]
   {:host host :port port :message msg})
 
+(defn is-aggregate [k] false)
+(defn is-search [k] false)
+
 (defn message-type
-  [{ k :key v :vector ttl :ttl}]
+  [{ k "key" v "vector" ttl "ttl"}]
   (cond
     (is-aggregate k) :aggregate
     (is-search k) :search
-    :store))
+    :else :store))
 
-(defmulti handle-msg message-type)
+(defmulti handle-msg (fn [msg _ _ _] (message-type msg)))
 
-(defmethod :store [{ k :key v :vector ttl :ttl} ch host port]
-  (let [updates (db-update db k v))
+(defmethod handle-msg :store [{ k "key" v "vector" ttl "ttl"} ch host port]
+  (let [updates (db-update db k v)]
     (if (not-empty (:vector updates))
       (let [to-send (udp-msg
                      (pick-neighbor)
                      port
                      {:key k :vector updates :ttl (- ttl 1)})]
-        (enqueue ch (mp/pack-into to-send)))))
+        (enqueue ch (mp/pack to-send))))))
 
-(defmethod :aggregate [{ k :key v :vector ttl :ttl} ch host port] nil)
-(defmethod :search [{ k :key v :vector ttl :ttl} ch host port] nil)
+(defmethod handle-msg :aggregate [{ k "key" v "vector" ttl "ttl"} ch host port] nil)
+(defmethod handle-msg :search [{ k "key" v "vector" ttl "ttl"} ch host port] nil)
 
 (defn run-server [port]
-  (let [ch (udp-socket {:port (int port)})]
+  (let [ch (deref (udp-socket {:port port}))]
     (receive-all
+      ch
       (fn [{ host :host _port :port message :message }]
-        (handle-msg (mp/unpack message) ch host port)))))
+        (let [barray (.array message)
+              msg (first (mp/unpack barray))]
+          (println (str "received " msg " from " host))
+          (handle-msg msg ch host port))))))
