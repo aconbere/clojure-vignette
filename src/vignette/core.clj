@@ -44,7 +44,10 @@
 
 (defn find-neighbors
   [db]
-  (distinct (map (keys (db-search db "n:%")) #( (drop 2 %) ))))
+  (distinct
+    (map
+      (keys (db-search db "n:%"))
+      (fn [k] (take 2 (split (drop 2 k) #":"))))))
 
 (defn pick-neighbor
   [db]
@@ -71,16 +74,15 @@
 (defmulti handle-message (fn [msg _ _ _] (message-type msg)))
 
 (defmethod handle-message :store
-  [{ k "key" v "vector" ttl "ttl"} ch host port]
+  [{ k "key" v "vector" ttl "ttl"} ch _ _]
   (let [updates (db-update db k v)]
     (if (not-empty (:vector updates))
-      (let [to-send (udp-msg
-                     (pick-neighbor)
-                     port
-                     {:key k :vector updates :ttl (- ttl 1)})]
+      (let [[host port] (pick-neighbor)
+            to-send (udp-msg host port {:key k :vector updates :ttl (- ttl 1)})]
         (enqueue ch (mp/pack to-send))))))
 
-(defmethod handle-message :aggregate [{ k "key" v "vector" ttl "ttl"} ch host port] nil)
+(defmethod handle-message :aggregate
+  [{ k "key" v "vector" ttl "ttl"} ch host port] nil)
 
 (defmethod handle-message :search
   [{ query "key" v "vector" ttl "ttl"} ch host port]
@@ -89,13 +91,36 @@
        (enqueue ch
           (udp-msg host port {:key k :vector v :ttl 50}))))))
 
+
+(defn make-handle-datagram [ch]
+  (fn [{ host :host port :port message :message }]
+    (let [barray (.array message)
+          msg (first (mp/unpack barray))]
+      (println (str "received " msg " from " host))
+      (store-neighbor db host)
+      (handle-message msg ch host port))))
+
+(defn discover
+  [broadcast]
+  (enqueue broadcast (udp-msg "127.0.0.1" 6666 { :key "n:%" :vector {} :ttl 1})))
+
 (defn run-server [port]
-  (let [ch (deref (udp-socket {:port port}))]
-    (receive-all
-      ch
-      (fn [{ host :host _port :port message :message }]
-        (let [barray (.array message)
-              msg (first (mp/unpack barray))]
-          (println (str "received " msg " from " host))
-          (store-neighbor db host)
-          (handle-message msg ch host port))))))
+  (let [ch (deref (udp-socket {:port port}))
+        broadcast (deref (udp-socket {:port 6666 :broadcast true }))]
+    (discover broadcast)
+    (receive-all ch (make-handle-datagram ch))
+    (receive-all broadcast (make-handle-datagram broadcast))))
+
+(defn parse-int [s]
+  (Integer/parseInt (re-find #"\A-?\d+" s)))
+
+(defn -main [port]
+  (println "Starting vignette node on port: " port)
+  (run-server (parse-int port))
+  (let [id (rand-int 10)]
+    (loop [i 0]
+      ;; (db-update db "count" { id i})
+      (println "hll " (db-lookup db "hll"))
+      (Thread/sleep 1000)
+      (recur (+ i 1)))))
+
