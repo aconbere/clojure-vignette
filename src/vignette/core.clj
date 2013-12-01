@@ -61,14 +61,14 @@
   [host port msg]
   {:host host :port port :message msg})
 
-(defn is-search [k] (re-matches #".*%.*" k))
-(defn is-aggregate [k] (re-matches #".*\*.*" k))
+(defn is-search? [k] (re-matches #".*%.*" k))
+(defn is-aggregate? [k] (re-matches #".*\*.*" k))
 
 (defn message-type
   [{ k "key" v "vector" ttl "ttl"}]
   (cond
-    (is-aggregate k) :aggregate
-    (is-search k) :search
+    (is-aggregate? k) :aggregate
+    (is-search? k) :search
     :else :store))
 
 (defmulti handle-message (fn [msg _ _ _] (message-type msg)))
@@ -82,7 +82,7 @@
         (enqueue ch (mp/pack to-send))))))
 
 (defmethod handle-message :aggregate
-  [{ k "key" v "vector" ttl "ttl"} ch host port] nil)
+  [{ k "key" v "vector" ttl "ttl"} ch _ _] nil)
 
 (defmethod handle-message :search
   [{ query "key" v "vector" ttl "ttl"} ch host port]
@@ -90,7 +90,6 @@
     (map results (fn [k v]
        (enqueue ch
           (udp-msg host port {:key k :vector v :ttl 50}))))))
-
 
 (defn make-handle-datagram [ch]
   (fn [{ host :host port :port message :message }]
@@ -100,16 +99,9 @@
       (store-neighbor db host)
       (handle-message msg ch host port))))
 
-(defn discover
-  [broadcast]
-  (enqueue broadcast (udp-msg "127.0.0.1" 6666 { :key "n:%" :vector {} :ttl 1})))
-
 (defn run-server [port]
-  (let [ch (deref (udp-socket {:port port}))
-        broadcast (deref (udp-socket {:port 6666 :broadcast true }))]
-    (discover broadcast)
-    (receive-all ch (make-handle-datagram ch))
-    (receive-all broadcast (make-handle-datagram broadcast))))
+  (let [ch (deref (udp-socket {:port port}))]
+    (receive-all ch (make-handle-datagram ch))))
 
 (defn parse-int [s]
   (Integer/parseInt (re-find #"\A-?\d+" s)))
