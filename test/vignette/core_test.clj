@@ -2,15 +2,18 @@
   (:require [clojure.test :refer :all]
             [vignette.core :refer :all]))
 
+(defn h [host port]
+  { :host host :port port})
+
 (deftest test-find-neighbors
   (testing "Find Neighbor"
-    (let [db (store-neighbor {} "127.0.0.1" 7777)
-          db (store-neighbor db "127.0.0.1" 6666)
-          expected '(("127.0.0.1" 7777) ("127.0.0.1" 6666))]
+    (let [db (-> {} (store-neighbor (h "127.0.0.1" 7777)) (store-neighbor (h "127.0.0.1" 6666)))
+          expected #{(h "127.0.0.1" 7777) (h "127.0.0.1" 6666)}]
       (is (= expected (find-neighbors db))))))
 
-(deftest test-pick-neighbor
+(deftest test-pick-neighbors
   (testing "Pick Neighbor"
-    (let [db (store-neighbor {} "127.0.0.1" 7777)
-          db (store-neighbor db "127.0.0.1" 6666)]
-      (is (= '("127.0.0.1" 7777) (pick-neighbor db "127.0.0.1" 6666))))))
+    (let [self (h "127.0.0.1" 6666)
+          other (h "127.0.0.1" 7777)
+          db (-> {} (store-neighbor other) (store-neighbor self))]
+      (is (= (list other) (pick-neighbors db 1 #{ self }))))))
