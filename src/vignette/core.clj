@@ -22,8 +22,11 @@
 (defn pick-neighbor
   [db my-host my-port]
   (let [me (list my-host my-port)
-        neighbors (find-neighbors db)]
-    (rand-nth (filter #(not (= me %)) neighbors ))))
+        neighbors (find-neighbors db)
+        filtered-neighbors (filter #(not (= me %)) neighbors)]
+    (if (empty filtered-neighbors)
+      nil
+      (rand-nth filtered-neighbors))))
 
 (defn store-neighbor
   [db host port]
@@ -52,9 +55,11 @@
   [out server db { k "key" v "vector" ttl "ttl"} _ ]
   (let [[db updates] (vdb/update db k v)]
     (if (not-empty updates)
-      (let [[host port] (pick-neighbor db (:host server) (:port server))
+      (let [neighbor (pick-neighbor db (:host server) (:port server))]
+        (if neighbor
+          (let [[host port] neighbor
             to-send (udp-msg host port {:key k :vector updates :ttl (- ttl 1)})]
-        (go (>! out to-send))))
+            (go (>! out to-send))))))
     db))
 
 (defmethod handle-message :aggregate
