@@ -50,11 +50,13 @@
   [[in out] f]
   (go-loop
     [datagram (<! in)]
-    (f datagram))
+    (f datagram)
+    (recur (<! in)))
   [in out])
 
 (defn handle-hll
   [datagram]
+  (println "handler")
   (let [{ v "vector" } (datagram->message datagram)
        est (hll/estimate v)]
     (println est)))

@@ -36,7 +36,9 @@
 (defn update
   [db k v]
   (if (empty? v)
-    [db (lookup db k)]
+    (do
+      (println "empty vector, sending full response")
+      [db (lookup db k)])
     (let [[updates current] (vector-update (get db k {}) v)
           db (assoc db k current)]
       [db updates])))
