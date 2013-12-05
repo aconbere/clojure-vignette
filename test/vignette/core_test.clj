@@ -17,3 +17,16 @@
           other (h "127.0.0.1" 7777)
           db (-> {} (store-neighbor other) (store-neighbor self))]
       (is (= (list other) (pick-neighbors db 1 #{ self }))))))
+
+(deftest test-store-neighbor
+  (testing "Store Neighbor"
+    (is (true? (contains? (store-neighbor {} { :host "127.0.0.1" :port 6666 }) "n:127.0.0.1:6666")))))
+
+(deftest test-store-neighbors
+  (testing "Store Neighbor"
+    (let [a {:host "127.0.0.1" :port 6666 }
+          b {:host "127.0.0.1" :port 7777}
+          neighbors (list a b )
+          output (store-neighbors {} neighbors)]
+      (is (and (contains? output "n:127.0.0.1:6666")
+               (contains? output "n:127.0.0.1:7777"))))))

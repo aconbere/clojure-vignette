@@ -29,10 +29,14 @@
                  (assoc current i n)
                  (rest update)))))))
 
+(defn lookup
+  [db k]
+  (get db k {}))
+
 (defn update
   [db k v]
   (if (empty? v)
-    [db {}]
+    [db (lookup db k)]
     (let [[updates current] (vector-update (get db k {}) v)
           db (assoc db k current)]
       [db updates])))
@@ -43,6 +47,3 @@
         results (select-keys db ks)]
     results))
 
-(defn lookup
-  [db k]
-  (get db k {}))
