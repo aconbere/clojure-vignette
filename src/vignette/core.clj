@@ -88,7 +88,6 @@
    (vignette port neighbors default-opts))
   ([port neighbors opts]
     (let [host {:host "127.0.0.1" :port port}
-          neighbors (map #(string->host %) neighbors)
           db (agent (reduce store-neighbor {} neighbors))
           [in out] (connection host)
           server { :db db :host host :in in :out out :opts opts}]

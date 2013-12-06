@@ -1,15 +1,16 @@
 (ns vignette.client
-  (:require [ac.udp :refer [udp-socket]]
-            [clojure.core.async :refer [<! >! go go-loop]]
-            [clj-msgpack.core :as mp :refer [pack unpack]]
-            [clojure.string :refer [split join]]
-            [vignette.hll :as hll]
-            ))
+  (:require [clojure.core.async :refer [>! go]]
+            [vignette.core :as core]
+            [vignette.hll :as hll]))
 
-(comment
-(defn handle-hll
-  [datagram]
-  (println "handler")
-  (let [{ v "vector" } (datagram->message datagram)
-       est (hll/estimate v)]
-    (println est))))
+(defn client-send
+  [server k v]
+  (go (>! (:in server) (core/datagram server {:k k :v v}))))
+
+(defn query
+  [server k]
+  (client-send server k {}))
+
+(defn get-v
+  [server k]
+  ((deref (:db server)) k))

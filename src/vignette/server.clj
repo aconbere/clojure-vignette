@@ -20,16 +20,15 @@
         neighbors (core/pick-neighbors state 3 filtered-hosts)]
 
     (when (not-empty updates)
-      (when (-> server :opts :broadcast)
-        ;; if we have never seen this key and this is a partial message
-        ;; state of the key, go query the network for the full state
-        (when (and (not (contains? state k)) (not (core/full-message? msg)))
-          (core/query-neighbors
-            (:out server)
-            (core/pick-neighbors state 3 #{(:host server)})
-            (vdb/lookup state k)
-            { "full" true }))
-        (core/query-neighbors (:out server) neighbors k updates))
+      ;; if we have never seen this key and this is a partial message
+      ;; state of the key, go query the network for the full state
+      (when (and (not (contains? state k)) (not (core/full-message? msg)))
+        (core/query-neighbors
+          (:out server)
+          (core/pick-neighbors state 3 #{(:host server)})
+          (vdb/lookup state k)
+          { "full" true }))
+      (core/query-neighbors (:out server) neighbors k updates)
       (send (:db server) update-db-agent k updates))))
 
 (defmethod handle-message :aggregate
@@ -59,5 +58,7 @@
 
 (defn -main [port & neighbors]
   (println "Starting vignette node on port:" port "with neighbors: " neighbors)
-  (run (core/vignette (core/parse-int port) neighbors)))
+  (run (core/vignette
+         (core/parse-int port)
+         (map #(core/string->host %) neighbors))))
 
