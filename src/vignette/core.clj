@@ -1,14 +1,44 @@
 (ns vignette.core
-  (:require [clojure.core.async :as async :refer [<! >! go go-loop]]
+  (:require [ac.udp :refer [udp-socket]]
+            [clojure.core.async :refer [<! >! go go-loop timeout]]
+            [clj-msgpack.core :as mp :refer [pack unpack]]
+            [clojure.string :refer [split join]]
             [vignette.db :as vdb]
-            [vignette.client :as client]
-            [clojure.math.numeric-tower :as math :refer [floor]]
+            [vignette.hll :as hll]
             [clojure.set :refer [difference]]
+            [clojure.math.numeric-tower :refer [floor]]
             ))
+
+(defn parse-int [s]
+  (Integer/parseInt (re-find #"\A-?\d+" s)))
+
+(defn datagram->message
+  "Get and parse a message off of a datagram"
+  [{ host :host port :port message :message }]
+    (let [barray (.array message)]
+      (first (unpack barray))))
+
+(defn datagram->host
+  "grab the hosty bits off a datagram"
+  [{ host :host port :port message :message }]
+  { :host host :port port})
+
+(defn string->host
+  [host-string]
+  (let [[host port] (take 2 (split host-string #":"))]
+    { :host host :port (parse-int port)}))
+
+(defn host->string
+  [{host :host port :port}]
+  (join ":" [host port]))
+
+(defn datagram
+  [{ host :host port :port} msg]
+  {:host host :port port :message (mp/pack msg)})
 
 (defn key->host
   [neighbor-key]
-  (client/string->host (subs neighbor-key 2)))
+  (string->host (subs neighbor-key 2)))
 
 (defn find-neighbors
   [db]
@@ -24,18 +54,48 @@
 (defn store-neighbor
   [db host]
   (let [t (int (floor (/ (/ (System/currentTimeMillis) 60) 1000)))
-        k (str "n:" (client/host->string host))
+        k (str "n:" (host->string host))
         v { 0 t }
         db (first (vdb/update db k v))]
     db))
 
-(defn store-neighbors
-  [db hosts]
-  (reduce (fn [db h] (store-neighbor db h)) {} hosts))
+(defn query-neighbors
+  ([out neighbors k v] (query-neighbors out neighbors k v {}))
+  ([out neighbors k v opts]
+    (doseq [to neighbors]
+      (let [msg (datagram to (merge {"key" k "vector" v } opts))]
+        (go (>! out msg))))))
+
+(defn connection
+  [host] (udp-socket {:port (:port host)}))
+
+(defn heartbeat
+  [server]
+  (go-loop []
+    (<! (timeout 3000))
+    (query-neighbors
+      (:out server)
+      (pick-neighbors (deref (:db server)) 4 #{(:host server)})
+      (str "n:" (host->string (:host server)))
+      {0 (System/currentTimeMillis)}
+      {:full true})
+    (recur)))
+
+(def default-opts {:heartbeat true :broadcast true})
+
+(defn vignette
+  ([port neighbors]
+   (vignette port neighbors default-opts))
+  ([port neighbors opts]
+    (let [host {:host "127.0.0.1" :port port}
+          neighbors (map #(string->host %) neighbors)
+          db (agent (reduce store-neighbor {} neighbors))
+          [in out] (connection host)
+          server { :db db :host host :in in :out out :opts opts}]
+      server)))
 
 (defn is-search? [k] (re-matches #".*%.*" k))
 (defn is-aggregate? [k] (re-matches #".*\*.*" k))
-
 (defn message-type
   [{ k "key" v "vector" ttl "ttl"}]
   (cond
@@ -43,54 +103,17 @@
     (is-search? k) :search
     :else :store))
 
-(defmulti handle-message (fn [db out server msg datagram] (message-type msg)))
+(defn full-message?
+  [msg]
+  (boolean (get msg :full false)))
 
-(defmethod handle-message :store
-  [db out server { k "key" v "vector" ttl "ttl"} from ]
+(defn do-send
+  [ch host msg]
+  (go (>! ch (datagram host msg))))
 
-  (when (not (contains? db k))
-    (println "key not found")
-    (client/query-neighbors (pick-neighbors db 3 #{server}) out k))
-
-  (let [[db updates] (vdb/update db k v)]
-    (if (not-empty updates)
-      (let [neighbors (pick-neighbors db 1 #{server (client/datagram->host from)})]
-        (client/send-updates neighbors out k updates (- 1 ttl))))
-    db))
-
-(defmethod handle-message :aggregate
-  [db out server msg datagram]
-  db)
-
-(defmethod handle-message :search
-  [db out server { query "key" v "vector" ttl "ttl"} from]
-  (println "searching db with query:" query)
-  (let [results (vdb/search db query)]
-    (doseq [k (keys results)]
-      (let [v (results k)
-            to-send (client/udp-msg from {"key" k "vector" v "ttl" 50})]
-          (println to-send)
-          (go (>! out to-send))))
-  db))
-
-(defn run-server [port]
-  (let [[in out] (client/make-client port)
-        server {:host "127.0.0.1" :port port}
-        db (store-neighbor {} server)]
-    (go-loop [db db
-              datagram (<! in)]
-      (let [msg (client/datagram->message datagram)]
-        (println "received" msg "from" (:host datagram) (:port datagram))
-        (if (> (get msg "ttl" 0) 0)
-          (let [db (-> db
-                       (store-neighbor datagram)
-                       (handle-message out server msg datagram))]
-            (recur db (<! in)))
-          (recur db (<! in)))))
-    [in out]))
-
-(defn -main [port & neighbors]
-  (println "Starting vignette node on port:" port "with neighbors: " neighbors)
-  (let [[in out] (run-server (client/parse-int port))
-        neighbors (map #(client/string->host %) neighbors)]
-    (client/query-neighbors neighbors out "n:%")))
+(defn handle-hll
+  [datagram]
+  (println "handler")
+  (let [{ v "vector" } (datagram->message datagram)
+       est (hll/estimate v)]
+    (println est)))

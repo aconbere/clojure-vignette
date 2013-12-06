@@ -1,10 +1,4 @@
-(ns vignette.db
-  (:require [ac.udp :as udp :refer [udp-socket]]
-            [clojure.core.async :as async :refer [<! >! chan go go-loop]]
-            [clj-msgpack.core :as mp :refer [pack unpack]]
-            ;;[glass.core :as glass]
-            ;;[glass.core.io :as glass.io]
-            ))
+(ns vignette.db)
 
 (defn- make-key-regex [k]
   (re-pattern (clojure.string/replace k #"%" ".*")))
