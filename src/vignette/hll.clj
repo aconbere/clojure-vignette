@@ -1,18 +1,21 @@
 (ns vignette.hll
-  (:require [pandect.core :refer [md5-bytes]]
-            [clojure.math.numeric-tower :refer [floor round expt]]
-            ))
+  (:require [clojure.math.numeric-tower :refer [floor round expt abs]])
+  (:import (com.google.common.hash Hashing)))
 
 (def default-opts { :buckets 1024 :a 0.721 :two-32 (expt 2 32) })
+
+(defn hash-string
+  [string]
+  (-> (Hashing/murmur3_32) (.hashString string) .asInt))
 
 (defn vectorize 
   ([in] (vectorize in {}))
   ([in opts]
     (let [opts (merge opts default-opts)
           buckets (:buckets opts)
-          h (BigInteger. (md5-bytes (str in)))
-          bucket (.and h (BigInteger. (str (- buckets 1))))
-          counter (- 32 (floor (/ (Math/log h) (Math/log 2))))]
+          h (hash-string (str in))
+          bucket (bit-and h (- buckets 1))
+          counter (- 32 (floor (/ (Math/log (abs h)) (Math/log 2))))]
       { bucket counter })))
 
 (defn estimate

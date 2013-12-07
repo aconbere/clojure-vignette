@@ -15,8 +15,8 @@
 (defn datagram->message
   "Get and parse a message off of a datagram"
   [{ host :host port :port message :message }]
-    (let [barray (.array message)]
-      (first (unpack barray))))
+  (let [barray (.array message)]
+    (first (unpack barray))))
 
 (defn datagram->host
   "grab the hosty bits off a datagram"
@@ -33,8 +33,8 @@
   (join ":" [host port]))
 
 (defn datagram
-  [{ host :host port :port} msg]
-  {:host host :port port :message (mp/pack msg)})
+  [host msg]
+  {:host (:host host) :port (:port host) :message (mp/pack msg)})
 
 (defn key->host
   [neighbor-key]

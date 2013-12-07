@@ -9,19 +9,20 @@
 (defn- find-matching-keys [db query]
   (filter (fn [k] (key-matches? query k) ) (keys db)))
 
-(defn- vector-update
+(defn vector-update
   [current update]
   (loop [acc {}
          current current
          update update]
     (if (empty? update)
       [acc current]
-      (let [ [i n] (first update)
-             o (get current i 0)]
+      (let [[i n] (first update)
+            o (get current i 0)]
         (if (> n o)
           (recur (assoc acc i n)
                  (assoc current i n)
-                 (rest update)))))))
+                 (rest update))
+          (recur acc current (rest update)))))))
 
 (defn lookup
   [db k]

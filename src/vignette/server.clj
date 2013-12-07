@@ -16,8 +16,14 @@
   (let [{k "key" v "vector"} msg
         state (deref (:db server))
         [state updates] (vdb/update state k v)
-        filtered-hosts #{(:host server) from}
+        filtered-hosts (set [(:host server) from])
         neighbors (core/pick-neighbors state 3 filtered-hosts)]
+
+    (println "handle-message" "k" k)
+    (println "handle-message" "v" v)
+    (println "handle-message" "state" state)
+    (println "handle-message" "updates" updates)
+    (println "handle-message" "neighbors" neighbors)
 
     (when (not-empty updates)
       ;; if we have never seen this key and this is a partial message
@@ -47,7 +53,7 @@
 
 (defmethod handle-command :store
   [server cmd]
-  (core/do-send (:in server) server {:key (:key cmd) :vector (:vector cmd)}))
+  (handle-message server (:host server) {"key" (:key cmd) "vector" (:vector cmd)}))
 
 (defmethod handle-command :query
   [server cmd]

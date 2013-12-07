@@ -8,5 +8,5 @@
                  [clj-msgpack "0.2.0"]
                  [org.clojure/math.numeric-tower "0.0.2"]
                  [ac "0.1.0-SNAPSHOT"]
-                 [pandect "0.3.0"]
+                 [com.google.guava/guava "15.0"]
                  ])

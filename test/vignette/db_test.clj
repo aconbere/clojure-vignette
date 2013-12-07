@@ -4,8 +4,12 @@
 
 (deftest test-update
   (testing "Test db update"
-    (let [db {}
-          expected [{ "x" { 1 2 3 4 }} { 1 2 3 4 }]
-          input (update db "x" { 1 2 3 4 } )]
-      (is (= expected input )))))
+    (let [db {}]
+      (let [expected [{ "x" { 1 2 3 4 }} { 1 2 3 4 }]
+            input (update db "x" { 1 2 3 4 } )]
+        (is (= expected input )))
+
+      (let [expected [{"hll" {5 -93.0}} {5 -93.0}]
+            input (update db "hll" {5 -93.0})]
+        (is (= expected input ))))))
 

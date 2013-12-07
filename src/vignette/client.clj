@@ -5,7 +5,8 @@
 
 (defn -send
   [server cmd]
-   (>!! (:cmd server) cmd))
+   (>!! (:cmd server) cmd)
+  server)
 
 (defn query [server k] (-send server { :type :query :key k }))
 (defn store [server k v] (-send server { :type :store :key k :vector v}))

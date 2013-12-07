@@ -9,15 +9,18 @@
 
 (defn handle-hll
   [datagram]
-  (println "handler")
   (let [{ v "vector" } (core/datagram->message datagram)
        est (hll/estimate v)]
     (println est)))
 
-(defn run-hll
-  []
+(defn example-server
+  [port]
   (let [neighbors ["127.0.0.1:6000"]
-        port 7000
+        port port
         opts { :heartbeat false }
         server (server/run (core/vignette port (map #(core/string->host %) neighbors) opts))]
-    (client/store server "hll" (hll/vectorize (str (rand))))))
+    server))
+
+(defn example-run
+  [server]
+  (client/store server "hll" (hll/vectorize (str (rand)))))
