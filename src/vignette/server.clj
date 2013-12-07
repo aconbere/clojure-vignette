@@ -43,6 +43,27 @@
       (let [v (results k)]
         (core/do-send (:out server) from {"key" k "vector" v})))))
 
+(defmulti handle-command (fn [server cmd] (:type cmd)))
+
+(defmethod handle-command :store
+  [server cmd]
+  (core/do-send (:in server) server {:key (:key cmd) :vector (:vector cmd)}))
+
+(defmethod handle-command :query
+  [server cmd]
+  (core/query-neighbors
+    (:out server)
+    (core/pick-neighbors (deref (:db server)) 3 #{(:host server)})
+    (:key cmd)
+    {}
+    { "full" true }))
+
+(defn command-listener
+  [server]
+  (go-loop [cmd (<! (:cmd server))]
+    (handle-command server cmd)
+    (recur (<! (:cmd server)))))
+
 (defn run
   [server]
   (go-loop [datagram (<! (:in server))]
@@ -53,6 +74,7 @@
       (handle-message server incoming-host msg))
     (recur (<! (:in server))))
 
+  (command-listener server)
   (when (-> server :opts :heartbeat) (core/heartbeat server))
   server)
 

@@ -1,6 +1,6 @@
 (ns vignette.core
   (:require [ac.udp :refer [udp-socket]]
-            [clojure.core.async :refer [<! >! go go-loop timeout]]
+            [clojure.core.async :refer [<! >! go go-loop timeout chan]]
             [clj-msgpack.core :as mp :refer [pack unpack]]
             [clojure.string :refer [split join]]
             [vignette.db :as vdb]
@@ -53,7 +53,7 @@
 
 (defn store-neighbor
   [db host]
-  (let [t (int (floor (/ (/ (System/currentTimeMillis) 60) 1000)))
+  (let [t (System/currentTimeMillis)
         k (str "n:" (host->string host))
         v { 0 t }
         db (first (vdb/update db k v))]
@@ -90,7 +90,8 @@
     (let [host {:host "127.0.0.1" :port port}
           db (agent (reduce store-neighbor {} neighbors))
           [in out] (connection host)
-          server { :db db :host host :in in :out out :opts opts}]
+          cmd (chan)
+          server { :db db :host host :in in :out out :cmd cmd :opts opts}]
       server)))
 
 (defn is-search? [k] (re-matches #".*%.*" k))
@@ -107,12 +108,5 @@
   (boolean (get msg :full false)))
 
 (defn do-send
-  [ch host msg]
-  (go (>! ch (datagram host msg))))
-
-(defn handle-hll
-  [datagram]
-  (println "handler")
-  (let [{ v "vector" } (datagram->message datagram)
-       est (hll/estimate v)]
-    (println est)))
+  [ch to msg]
+  (go (>! ch (datagram to msg))))

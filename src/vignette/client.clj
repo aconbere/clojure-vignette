@@ -1,16 +1,16 @@
 (ns vignette.client
-  (:require [clojure.core.async :refer [>! go]]
+  (:require [clojure.core.async :refer [>! >!! go]]
             [vignette.core :as core]
             [vignette.hll :as hll]))
 
-(defn client-send
-  [server k v]
-  (go (>! (:in server) (core/datagram server {:k k :v v}))))
+(defn -send
+  [server cmd]
+   (>!! (:cmd server) cmd))
 
-(defn query
-  [server k]
-  (client-send server k {}))
+(defn query [server k] (-send server { :type :query :key k }))
+(defn store [server k v] (-send server { :type :store :key k :vector v}))
 
-(defn get-v
-  [server k]
-  ((deref (:db server)) k))
+(defn getv [server k] (get (deref (:db server)) k {}))
+(defn add-neighbor
+  [server neighbor]
+  (store server (str "n:" (core/host->string neighbor)) {0 (System/currentTimeMillis)}))
