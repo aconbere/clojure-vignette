@@ -19,12 +19,6 @@
         filtered-hosts (set [(:host server) from])
         neighbors (core/pick-neighbors state 3 filtered-hosts)]
 
-    (println "handle-message" "k" k)
-    (println "handle-message" "v" v)
-    (println "handle-message" "state" state)
-    (println "handle-message" "updates" updates)
-    (println "handle-message" "neighbors" neighbors)
-
     (when (not-empty updates)
       ;; if we have never seen this key and this is a partial message
       ;; state of the key, go query the network for the full state

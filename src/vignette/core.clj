@@ -42,14 +42,20 @@
 
 (defn find-neighbors
   [db]
-  (set (map key->host (keys (vdb/search db "n:%")))))
+  (reduce (fn [acc [k v]] (assoc acc (key->host k) (get v 0)))
+          (vdb/search db "n:%")
+          {}))
 
 (defn pick-neighbors
-  [db n filtered-hosts]
-  (let [neighbors (difference (find-neighbors db) filtered-hosts)]
-    (if (empty? neighbors)
-      nil
-      (take n (shuffle neighbors)))))
+  ([db n filtered-hosts] (pick-neighbors db n filtered-hosts 10000))
+  ([db n filtered-hosts timeout]
+    (let [neighbors (find-neighbors db)
+          hosts (difference (set (keys neighbors)) filtered-hosts)
+          hosts (select-keys neighbors hosts)
+          time-filter (- (System/currentTimeMillis) timeout)]
+      (if (empty? hosts)
+        nil
+        (map first (take n (shuffle (filter #(> (second %) time-filter) (seq hosts)))))))))
 
 (defn store-neighbor
   [db host]
