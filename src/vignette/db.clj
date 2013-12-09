@@ -9,7 +9,6 @@
 (defn- find-matching-keys [db query]
   (filter (fn [k] (key-matches? query k) ) (keys db)))
 
-
 (defn vector-update
   [current update]
   (loop [acc {}

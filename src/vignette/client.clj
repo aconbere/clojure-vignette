@@ -8,8 +8,8 @@
    (>!! (:cmd server) cmd)
   server)
 
-(defn query [server k] (-send server { :type :query :key k }))
-(defn store [server k v] (-send server { :type :store :key k :vector v}))
+(defn query [server k] (-send server {"type" :query "key" k}))
+(defn store [server k v] (-send server {"type" :store "key" k "vector" v}))
 
 (defn getv [server k] (get (deref (:db server)) k {}))
 (defn add-neighbor

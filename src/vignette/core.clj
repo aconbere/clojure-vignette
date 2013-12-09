@@ -66,28 +66,25 @@
     db))
 
 (defn query-neighbors
-  ([out neighbors k v] (query-neighbors out neighbors k v {}))
-  ([out neighbors k v opts]
+  ([out neighbors msg] (query-neighbors out neighbors msg {}))
+  ([out neighbors msg opts]
     (doseq [to neighbors]
-      (let [msg (datagram to (merge {"key" k "vector" v } opts))]
+      (let [msg (datagram to (merge msg opts))]
         (go (>! out msg))))))
 
 (defn connection
   [host] (udp-socket {:port (:port host)}))
 
 (defn heartbeat
-  [server]
-  (go-loop []
-    (<! (timeout 3000))
-    (query-neighbors
-      (:out server)
-      (pick-neighbors (deref (:db server)) 4 #{(:host server)})
-      (str "n:" (host->string (:host server)))
-      {0 (System/currentTimeMillis)}
-      {:full true})
-    (recur)))
+  [server n]
+  (query-neighbors
+    (:udp-out server)
+    (pick-neighbors (deref (:db server)) n #{(:host server)})
+    (str "n:" (host->string (:host server)))
+    {0 (System/currentTimeMillis)}
+    {:full true}))
 
-(def default-opts {:heartbeat true :broadcast true})
+(def default-opts {:heartbeat true })
 
 (defn vignette
   ([port neighbors]
@@ -97,7 +94,13 @@
           db (agent (reduce store-neighbor {} neighbors))
           [in out] (connection host)
           cmd (chan)
-          server { :db db :host host :in in :out out :cmd cmd :opts opts}]
+          server {:db db
+                  :host host
+                  :in in
+                  :out (chan)
+                  :udp-out out
+                  :cmd cmd
+                  :opts opts}]
       server)))
 
 (defn is-search? [k] (re-matches #".*%.*" k))
@@ -111,8 +114,16 @@
 
 (defn full-message?
   [msg]
-  (boolean (get msg :full false)))
+  (boolean (get msg "full" false)))
 
-(defn do-send
-  [ch to msg]
-  (go (>! ch (datagram to msg))))
+(defn compress-inner
+  [acc msg]
+  (let [k [(msg "key") (full-message? msg)]
+        v (msg "vector")
+        current (get acc k {})
+        n (vdb/update current v)]
+    (assoc acc k n)))
+
+(defn compress-messages
+  [msgs]
+  (reduce compress-inner nil msgs))
