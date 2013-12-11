@@ -47,15 +47,11 @@
           {}))
 
 (defn pick-neighbors
-  ([db n filtered-hosts] (pick-neighbors db n filtered-hosts 10000))
-  ([db n filtered-hosts timeout]
-    (let [neighbors (find-neighbors db)
-          hosts (difference (set (keys neighbors)) filtered-hosts)
-          hosts (select-keys neighbors hosts)
-          time-filter (- (System/currentTimeMillis) timeout)]
-      (if (empty? hosts)
-        nil
-        (map first (take n (shuffle (filter #(> (second %) time-filter) (seq hosts)))))))))
+  [db n filtered-hosts]
+  (let [neighbors (find-neighbors db)
+        hosts (difference (set (keys neighbors)) filtered-hosts)
+        hosts (select-keys neighbors hosts)]
+    (map key->host (shuffle (take n (map first (seq hosts)))))))
 
 (defn store-neighbor
   [db host]
@@ -66,25 +62,25 @@
     db))
 
 (defn query-neighbors
-  ([out neighbors msg] (query-neighbors out neighbors msg {}))
-  ([out neighbors msg opts]
-    (doseq [to neighbors]
-      (let [msg (datagram to (merge msg opts))]
-        (go (>! out msg))))))
+  [out neighbors msg]
+  (doseq [to neighbors]
+    (println "sending" msg "to" to)
+    (go (>! out (datagram to msg)))))
 
 (defn connection
   [host] (udp-socket {:port (:port host)}))
 
 (defn heartbeat
   [server n]
-  (query-neighbors
-    (:udp-out server)
-    (pick-neighbors (deref (:db server)) n #{(:host server)})
-    (str "n:" (host->string (:host server)))
-    {0 (System/currentTimeMillis)}
-    {:full true}))
+  (let [k (str "n:" (host->string (:host server)))
+        v {0 (System/currentTimeMillis)}
+        msg {"key" k "vector" v "full" true}]
+    (query-neighbors
+      (:udp-out server)
+      (pick-neighbors (deref (:db server)) n #{(:host server)})
+      msg)))
 
-(def default-opts {:heartbeat true })
+(def default-opts {:timeout 3000})
 
 (defn vignette
   ([port neighbors]
@@ -116,14 +112,20 @@
   [msg]
   (boolean (get msg "full" false)))
 
+;; returns things like
+;; [[<key> <bool>] <vector>]
+;;
+;; The bool is to namespace partial and full vectors
 (defn compress-inner
   [acc msg]
   (let [k [(msg "key") (full-message? msg)]
         v (msg "vector")
         current (get acc k {})
-        n (vdb/update current v)]
+        n (first (vdb/vector-update current v))]
     (assoc acc k n)))
 
 (defn compress-messages
   [msgs]
-  (reduce compress-inner nil msgs))
+  (let [compressed (reduce compress-inner {} msgs)]
+    (map (fn [[[k full?] v]] (if full?  {"key" k "vector" v "full" true} {"key" k "vector" v}))
+         compressed)))

@@ -9,18 +9,19 @@
   (first (vdb/update state k v)))
 
 (defmulti handle-message
-  (fn [server from msg] (core/message-type msg)))
+  (fn [server from msg]
+    (core/message-type msg)))
 
 (defmethod handle-message :store
   [server from msg]
   (let [{k "key" v "vector"} msg
         state (deref (:db server))
         [state updates] (vdb/update state k v)]
-    (when (not-empty updates)
+    (when (not (empty? updates))
       ;; if we have never seen this key and this is a partial message
       ;; state of the key, go query the network for the full state
       (when (and (not (contains? state k)) (not (core/full-message? msg)))
-        (go (>! (:out server) {"key" k "vector" (vdb/lookup state k) :full true}))) 
+        (go (>! (:out server) {"key" k "vector" (vdb/lookup state k) "full" true}))) 
       (go (>! (:out server) {"key" k "vector" updates}))
       (send (:db server) update-db-agent k updates))))
 
@@ -44,11 +45,9 @@
 (defmethod handle-command :query
   [server cmd]
   (core/query-neighbors
-    (:out server)
+    (:udp-out server)
     (core/pick-neighbors (deref (:db server)) 3 #{(:host server)})
-    (cmd "key")
-    {}
-    { "full" true }))
+    {(cmd "key") {} "full" true }))
 
 (defn command-loop
   [server]
@@ -67,27 +66,31 @@
       (handle-message server incoming-host msg))
     (recur (<! (:in server)))))
 
+(defn -do-output
+  [server msgs]
+  (doseq [msg (core/compress-messages msgs)]
+    (core/query-neighbors
+      (:udp-out server)
+      (core/pick-neighbors (deref (:db server)) 4 #{(:host server)})
+      msg)))
+
 (defn output-loop
-  [server timeout]
-  (go-loop [msgs nil
-            t (+ (System/currentTimeMillis) timeout)]
-    (if (> (System/currentTimeMillis) t)
-      (do 
-        (println "dumping")
-        (doseq [msg (core/compress-messages msgs)]
-          (core/query-neighbors
-            (:udp-out server)
-            (core/pick-neighbors (deref (:db server)) 4 #{(:host server)})
-            msg))
-        (core/heartbeat server 4)
-        (recur nil (+ (System/currentTimeMillis) timeout)))
-      (recur (conj msgs (<! (:out server))) t))))
+  [server]
+  (if (-> server :opts :timeout)
+    (go-loop [msgs (list (<! (:out server)))]
+      (<! (timeout (-> server :opts :timeout)))
+      (-do-output server msgs)
+      (core/heartbeat server 4)
+      (recur (conj msgs (<! (:out server)))))
+    (go-loop [msg (<! (:out server))]
+      (-do-output server [msg])
+      (recur (<! (:out server))))))
 
 (defn run
   [server]
   (message-loop server)
   (command-loop server)
-  (output-loop server 3000)
+  (output-loop server)
   server)
 
 (defn -main [port & neighbors]
@@ -95,5 +98,5 @@
   (run
     (core/vignette
       (core/parse-int port)
-      (map #(core/string->host %) neighbors))))
-
+      (map #(core/string->host %) neighbors)
+      )))

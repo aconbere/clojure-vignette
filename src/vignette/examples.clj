@@ -17,7 +17,7 @@
   [port]
   (let [neighbors ["127.0.0.1:6000"]
         port port
-        opts { :heartbeat false }
+        opts {:timeout nil}
         server (server/run (core/vignette port (map #(core/string->host %) neighbors) opts))]
     server))
 
