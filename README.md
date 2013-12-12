@@ -37,7 +37,7 @@ A vignette node should respond to a receiving a message from a given sender by.
 
 ## Presence
 
-In order to form the network each Vignette node announces itself to at least one known node when coming online by sending a storage message of the form `{ "n:<host>:<port> { 0 <timestamp> }}`. This is sufficient to percolate this knowledge to much of the network. Every time t nodes will rebroadcast their presence to a sample of their known nodes. It should be expected that nodes that have not heard from eachother in sufficient time will stop sending updates that direction.
+In order to form the network each Vignette node announces itself to at least one known node when coming online by sending a storage message of the form `{ "n:<host>:<port> { 0 <timestamp> } "full" true}`. This is sufficient to percolate this knowledge to much of the network. Every time t nodes will rebroadcast their presence to a sample of their known nodes. It should be expected that nodes that have not heard from eachother in sufficient time will stop sending updates that direction.
 
 ## Usage
 
