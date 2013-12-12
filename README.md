@@ -21,7 +21,7 @@ sending the update `{"foo" {0 3, 1 11}}` would result in the new vector `{"foo" 
 
 Vignette communicates via messages sent encoded as msgpack over udp.
 
-``clojure
+```clojure
 {"key" "foo" "vector" {0 8, 3 7} "full" true}
 ```
 
