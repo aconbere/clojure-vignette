@@ -15,3 +15,9 @@
 (deftest test-store-neighbor
   (testing "Store Neighbor"
     (is (true? (contains? (store-neighbor {} { :host "127.0.0.1" :port 6666 }) "n:127.0.0.1:6666")))))
+
+(deftest test-compress-inner
+  (testing "compress-inner"
+    (is (= {["k" false] {0 5}} (compress-inner {} { "key" "k" "vector" {0 5}})))
+    (is (= {["k" false] {0 5 1 6}} (compress-inner {["k" false] {1 6}} { "key" "k" "vector" {0 5} })))
+    ))

@@ -17,10 +17,11 @@
   [port]
   (let [neighbors ["127.0.0.1:6000"]
         port port
-        opts {:timeout nil}
+        opts {:timeout nil :heartbeat false}
         server (server/run (core/vignette port (map #(core/string->host %) neighbors) opts))]
     server))
 
 (defn example-run
   [server]
-  (client/store server "hll" (hll/vectorize (str (rand)))))
+  (client/store server "hll" (hll/vectorize (str (rand))))
+  nil)

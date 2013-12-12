@@ -3,13 +3,12 @@
             [vignette.db :refer :all]))
 
 (deftest test-update
-  (testing "Test db update"
+  (testing "update"
     (let [db {}]
       (let [expected [{ "x" { 1 2 3 4 }} { 1 2 3 4 }]
             input (update db "x" { 1 2 3 4 } )]
-        (is (= expected input )))
-
-      (let [expected [{"hll" {5 -93.0}} {5 -93.0}]
-            input (update db "hll" {5 -93.0})]
         (is (= expected input ))))))
 
+(deftest test-vector-update
+  (testing "vector-update"
+    (is (= [{1 6} {0 5 1 6}] (vector-update {0 5} {1 6})))))

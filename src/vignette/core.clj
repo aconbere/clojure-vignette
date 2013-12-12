@@ -41,17 +41,21 @@
   (string->host (subs neighbor-key 2)))
 
 (defn find-neighbors
+  "Returns a map from hosts of the type { :host <host> :port <port> } to a timestamp"
   [db]
-  (reduce (fn [acc [k v]] (assoc acc (key->host k) (get v 0)))
-          (vdb/search db "n:%")
-          {}))
+  (reduce
+    (fn [acc [k v]] (assoc acc (key->host k) (get v 0)))
+    {}
+    (vdb/search db "n:%")
+    ))
 
 (defn pick-neighbors
+  "returns a list of hosts of the type { :host <host> :port <port> }"
   [db n filtered-hosts]
   (let [neighbors (find-neighbors db)
         hosts (difference (set (keys neighbors)) filtered-hosts)
         hosts (select-keys neighbors hosts)]
-    (map key->host (shuffle (take n (map first (seq hosts)))))))
+    (shuffle (take n (map first (seq hosts))))))
 
 (defn store-neighbor
   [db host]
@@ -80,7 +84,7 @@
       (pick-neighbors (deref (:db server)) n #{(:host server)})
       msg)))
 
-(def default-opts {:timeout 3000})
+(def default-opts {:timeout 3000 :heartbeat true})
 
 (defn vignette
   ([port neighbors]
@@ -121,7 +125,7 @@
   (let [k [(msg "key") (full-message? msg)]
         v (msg "vector")
         current (get acc k {})
-        n (first (vdb/vector-update current v))]
+        n (second (vdb/vector-update current v))]
     (assoc acc k n)))
 
 (defn compress-messages

@@ -10,6 +10,8 @@
   (filter (fn [k] (key-matches? query k) ) (keys db)))
 
 (defn vector-update
+  "takes two sparse vectors represented as maps from integer indexes
+  to indexes and applies an element wise max to them."
   [current update]
   (loop [acc {}
          current current
