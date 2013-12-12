@@ -4,4 +4,6 @@ A clojure implementation of avibryant's [vignette](https://github.com/avibryant/
 
 ## Usage
 
-TODO
+```bash
+$ lein run <port> [<host>:port]
+```
